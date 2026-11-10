@@ -79,9 +79,16 @@ canvas{display:block;width:100%;height:100%}
 .rank .sc{font-family:var(--display);font-size:1.1rem}
 .rank .empty{padding:12px;color:var(--muted);text-align:center;display:block}
 .confirm{font-size:.9rem;color:var(--bad)}
+.golink{display:block;text-align:center;border:3px dashed var(--ink);border-radius:16px;padding:10px;font-family:var(--display);font-size:1.15rem;color:var(--ink);text-decoration:none;background:#fff8e1}
+.golink:hover{background:#ffefb8}
+.olcard .best{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0}
+.olcard .best span{font-family:var(--display);font-size:1.15rem;color:var(--ink);background:var(--ground);border:3px solid var(--ink);border-radius:999px;padding:4px 14px;font-variant-numeric:tabular-nums}
+.olcard .best span.top{background:#fff0c2}
+.olcard .best span.new{background:var(--sun);color:#fff;animation:pop .5s ease}
 .rank .nm .dot{display:inline-block;width:.6em;height:.6em;border-radius:50%;background:var(--ok);margin-right:5px;vertical-align:middle;box-shadow:0 0 0 2px #fff}
 .rknote{margin:0;padding:6px 12px;font-size:.82rem;color:var(--muted);border-top:2px dashed #d9cdea;text-align:left}
 .rknote.warn{color:var(--bad)}
+.quiz>.rank{flex:none}
 .rank.live h3{background:#c9f2dd}
 .rank.live ol{max-height:180px}
 .rank.live .st{font-size:.85rem}
@@ -120,6 +127,7 @@ canvas{display:block;width:100%;height:100%}
             <input id="nickIn" maxlength="8" placeholder="예: 별빛소녀" autocomplete="off"></label>
           <p class="err" id="nickErr" hidden>닉네임을 한 글자 이상 써 주세요.</p>
           <button class="big" id="startBtn">게임 시작!</button>
+          <a class="golink" href="dotori.html">🐿️ 다른 게임: 도토리 길이 탐험 하러 가기 →</a>
           <div class="rank"><h3><span class="rkTitle">🏆 이 기기 랭킹</span> <button id="resetBtn">기록 지우기</button></h3><ol id="rankStart"></ol><p class="rknote" hidden></p></div>
           <p class="confirm" id="resetAsk" hidden>정말 모든 기록을 지울까요? <button class="quit" id="resetYes">네, 지워요</button> <button class="quit" id="resetNo">아니요</button></p>
         </div>
@@ -132,6 +140,7 @@ canvas{display:block;width:100%;height:100%}
       <div class="overlay" id="ovOver" hidden>
         <div class="olcard">
           <h2 class="lose" id="ovTitle">게임 끝!</h2>
+          <div class="best" id="ovBest"></div>
           <p id="ovText"></p>
           <div class="rank"><h3><span class="rkTitle">🏆 이 기기 랭킹</span></h3><ol id="rankOver"></ol><p class="rknote" hidden></p></div>
           <div class="btnrow"><button class="big" id="againBtn">다시 하기</button><button class="big alt" id="homeBtn">처음으로</button></div>
@@ -228,8 +237,8 @@ function refreshLive(){
     [["no",r.play?"🎮":"💤"],["nm",r.name+(r.me?" (나)":"")],["lv","Lv."+r.level],["sc",r.score+"점"]].forEach(([c,t])=>{const s=document.createElement("span");s.className=c;s.textContent=t;li.appendChild(s)});
     box.appendChild(li)});
   const players=list.filter(r=>r.play),pill=$("netPill");
-  if(NET.room&&list.length>1){const k=players.findIndex(r=>r.me);
-    pill.textContent=`👥 ${list.length}명`+(k>=0&&players.length>1?` · 지금 ${k+1}등`:"");pill.hidden=false}
+  if(NET.room){const k=players.findIndex(r=>r.me),n=Math.max(1,list.length);
+    pill.textContent=`👥 ${n}명`+(k>=0&&players.length>1?` · 지금 ${k+1}등`:n===1?" · 나 혼자":"");pill.hidden=false}
   else pill.hidden=true;
   refreshRanks();
 }
@@ -263,11 +272,26 @@ async function loadTop(){
 }
 function makeId(){try{return crypto.randomUUID()}catch(e){return"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(c^Math.random()*16>>c/4).toString(16))}}
 function makeSecret(){const a=new Uint8Array(24);crypto.getRandomValues(a);return Array.from(a,b=>b.toString(16).padStart(2,"0")).join("")}
+/* one record per nickname: each nickname gets its own id + secret on this device */
+let idMap=null;
+function loadIds(){if(idMap)return idMap;idMap={};try{const m=JSON.parse(localStorage.getItem("kong-ids")||"{}");if(m&&typeof m==="object")idMap=m}catch(e){}return idMap}
+function saveIds(){try{localStorage.setItem("kong-ids",JSON.stringify(idMap))}catch(e){}}
+function peekIdentity(n){const m=loadIds()[n];if(m&&m.id&&m.secret){NET.me=m.id;NET.secret=m.secret}else{NET.me=null;NET.secret=null}}
+function useIdentity(n){
+  const map=loadIds();
+  if(!map[n]){
+    // an older version kept one record per device: give it to the nickname it belongs to
+    let pid=null,sec=null,last=null;try{pid=localStorage.getItem("kong-pid");sec=localStorage.getItem("kong-secret");last=localStorage.getItem("kong-nick")}catch(e){}
+    const taken=Object.values(map).some(v=>v&&v.id===pid),row=globalRows.find(r=>r.id===pid);
+    if(pid&&sec&&sec.length>=16&&!taken&&(row?row.name===n:last===n))map[n]={id:pid,secret:sec};
+    else map[n]={id:makeId(),secret:makeSecret()};
+    saveIds();
+  }
+  NET.me=map[n].id;NET.secret=map[n].secret;lastPres="";
+}
 function netInit(){
   if(!window.supabase||!supabase.createClient)return;
-  try{NET.me=localStorage.getItem("kong-pid");NET.secret=localStorage.getItem("kong-secret")}catch(e){}
-  if(!NET.me||!NET.secret||NET.secret.length<16){NET.me=makeId();NET.secret=makeSecret();
-    try{localStorage.setItem("kong-pid",NET.me);localStorage.setItem("kong-secret",NET.secret)}catch(e){}}
+  try{const n=localStorage.getItem("kong-nick");if(n)peekIdentity(n)}catch(e){}
   const sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
   NET.db=sb;NET.on=true;NET.loading=true;NET.note="친구들 기록을 불러오는 중…";refreshRanks();
   loadTimer=setTimeout(()=>{if(NET.loading)setNote("랭킹 서버에 아직 연결되지 않았어요. 잠시만 기다려 주세요.",true)},10000);
@@ -477,7 +501,9 @@ function startGame(){
   const v=$("nickIn").value.trim();
   if(!v){$("nickErr").hidden=false;$("nickIn").focus();return}
   audio();nick=v.slice(0,8);$("nickErr").hidden=true;
+  useIdentity(nick);
   try{localStorage.setItem("kong-nick",nick)}catch(e){}
+  startBest=Math.max(bestSeen[nick]||0,NET.on?((myBest()||{}).score||0):localBest(nick));
   level=1;tokens=0;streak=0;score=0;correct=0;coinCount=0;
   ["ovStart","ovOver","ovLevel"].forEach(id=>$(id).hidden=true);
   $("fb").innerHTML="&nbsp;";$("fb").className="fb";
@@ -488,16 +514,20 @@ function hit(){
   tries++;state="hit";animT=0;P.vy=-9;P.ground=false;P.on=null;keys.left=keys.right=false;
   tone(500,0,.4,"square",.1,120);updateHud();
 }
+let startBest=0;const bestSeen={};
+function localBest(n){return loadRank().filter(r=>r.name===n).reduce((m,r)=>Math.max(m,r.score),0)}
 function gameOver(reason){
   state="over";
   const t=Date.now();const a=loadRank();a.push({name:nick,score,level,t});saveRank(sortRank(a).slice(0,50));
-  let pos=sortRank(loadRank()).findIndex(r=>r.t===t)+1,where="이 기기에서";overT=t;
+  let pos=sortRank(loadRank()).findIndex(r=>r.t===t)+1,where="이번 판은 이 기기에서";overT=t;
   if(NET.on){netSave();const b=myBest(),mine={id:NET.me,score:Math.max(score,b?b.score:0),level:b&&b.score>score?b.level:level,t:0};
     const all=globalRows.filter(r=>r.id!==NET.me).concat(NET.me?[mine]:[]).sort((x,y)=>y.score-x.score||y.level-x.level);
-    if(NET.me){pos=all.findIndex(r=>r.id===NET.me)+1;where=`친구 ${all.length}명 중`}}
+    if(NET.me){pos=all.findIndex(r=>r.id===NET.me)+1;where=`최고 기록으로 친구 ${all.length}명 중`}}
   netPresence();
+  const best=Math.max(startBest,score);bestSeen[nick]=best;const isNew=score>startBest&&startBest>0,box=$("ovBest");box.innerHTML="";
+  [[`이번 판 ${score}점`,isNew?"new":""],[isNew?"🎉 새 최고 기록!":`내 최고 ${best}점`,isNew?"new":"top"]].forEach(([t,c])=>{const sp=document.createElement("span");sp.textContent=t;if(c)sp.className=c;box.appendChild(sp)});
   $("ovTitle").textContent=reason==="quit"?"수고했어요!":"게임 끝!";
-  $("ovText").textContent=`${nick}님은 레벨 ${level}까지 가서 ${score}점! 시계 문제 ${correct}개를 맞히고 코인 ${coinCount}개를 모았어요.`+(pos?` ${where} ${pos}등이에요.`:"");
+  $("ovText").textContent=`${nick}님은 이번 판에서 레벨 ${level}까지 가서 ${score}점! 시계 문제 ${correct}개를 맞히고 코인 ${coinCount}개를 모았어요.`+(pos?` ${where} ${pos}등이에요.`:"");
   renderRank($("rankOver"),t);$("ovOver").hidden=false;
   tone(392,0,.2);tone(330,.18,.2);tone(262,.36,.35);
 }

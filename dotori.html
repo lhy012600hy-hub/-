@@ -93,6 +93,8 @@ canvas{display:block;width:100%;height:100%}
 .rank.live h3{background:#c9f2dd}
 .rank.live ol{max-height:180px}
 .confirm{font-size:.9rem;color:var(--bad)}
+.golink{display:block;text-align:center;border:3px dashed var(--ink);border-radius:16px;padding:10px;font-family:var(--display);font-size:1.15rem;color:var(--ink);text-decoration:none;background:#fff8e1}
+.golink:hover{background:#ffefb8}
 @keyframes pop{from{transform:scale(.7);opacity:.3}to{transform:scale(1);opacity:1}}
 @media (max-aspect-ratio:1/1){
   .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
@@ -129,6 +131,7 @@ canvas{display:block;width:100%;height:100%}
             <input id="nickIn" maxlength="8" placeholder="예: 별빛소녀" autocomplete="off"></label>
           <p class="err" id="nickErr" hidden>닉네임을 한 글자 이상 써 주세요.</p>
           <button class="big" id="startBtn">달리기 시작!</button>
+          <a class="golink" href="index.html">👻 다른 게임: 콩콩이 시계 점프 하러 가기 →</a>
           <div class="rank"><h3><span class="rkTitle">🏆 이 기기 랭킹</span> <button id="resetBtn">기록 지우기</button></h3><ol id="rankStart"></ol><p class="rknote" hidden></p></div>
           <p class="confirm" id="resetAsk" hidden>정말 이 기기 기록을 모두 지울까요? <button class="quit" id="resetYes">네, 지워요</button> <button class="quit" id="resetNo">아니요</button></p>
         </div>
